@@ -1,1 +1,320 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Barkodlu Stok – Web (Kurulumsuz, Kamera Destekli)</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;padding:16px}
+    .container{max-width:900px;margin:0 auto}
+    h1{font-size:22px;margin:0 0 8px;font-weight:800}
+    .tabs{display:flex;gap:8px;margin:12px 0}
+    .tab{flex:1;padding:10px;border-radius:10px;border:1px solid #ddd;background:#eee;font-weight:800;cursor:pointer;text-align:center}
+    .tab.active{background:#111;color:#fff;border-color:#111}
+    .section{margin:12px 0}
+    .label{font-weight:700;margin-bottom:6px}
+    .row{display:flex;gap:8px;align-items:center}
+    select,input,button{padding:10px;border:1px solid #ccc;border-radius:10px}
+    button.primary{background:#111;color:#fff;border-color:#111;font-weight:800;cursor:pointer}
+    button.ghost{background:#eee;color:#111;border-color:#ddd;font-weight:700;cursor:pointer}
+    .card{border:1px solid #eee;border-radius:12px;padding:12px;margin:8px 0}
+    .muted{color:#888}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .small{font-size:12px}
+    .hidden{display:none}
+    .ok{color:#0a0}
+    .err{color:#a00}
+    video{width:100%;max-height:300px;border:1px solid #ddd;border-radius:10px}
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Barkodlu Stok – Web (Kurulumsuz, Kamera Destekli)</h1>
+  <div class="small muted">IN/OUT · TRANSFER · SAYIM · Offline Kuyruk (localStorage) · Kamera/USB barkod · v0.2</div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="move">Giriş/Çıkış</button>
+    <button class="tab" data-tab="transfer">Transfer</button>
+    <button class="tab" data-tab="count">Sayım</button>
+  </div>
+
+  <div id="view-move">
+    <div class="section">
+      <div class="label">Depo</div>
+      <select id="move-location"></select>
+    </div>
+    <div class="section row">
+      <button class="tab active" id="btn-in">GİRİŞ</button>
+      <button class="tab" id="btn-out">ÇIKIŞ</button>
+    </div>
+    <div class="section">
+      <div class="label">Miktar</div>
+      <input id="move-qty" type="number" value="1" min="1" />
+    </div>
+    <div class="section">
+      <div class="label">Barkod</div>
+      <div class="row">
+        <input id="move-barcode" placeholder="Kameradan/klavyeden barkod" />
+        <button class="primary" id="move-save">Kaydet</button>
+      </div>
+      <div class="small muted">Kamera açıkken barkodu gösterin, alan otomatik dolar. USB/Bluetooth okuyucu varsa klavye gibi yazacaktır.</div>
+    </div>
+  </div>
+
+  <div id="view-transfer" class="hidden">
+    <div class="grid-2 section">
+      <div>
+        <div class="label">Kaynak</div>
+        <select id="from-location"></select>
+      </div>
+      <div>
+        <div class="label">Hedef</div>
+        <select id="to-location"></select>
+      </div>
+    </div>
+    <div class="grid-2 section">
+      <div>
+        <div class="label">Miktar</div>
+        <input id="transfer-qty" type="number" value="1" min="1" />
+      </div>
+      <div>
+        <div class="label">Barkod</div>
+        <div class="row">
+          <input id="transfer-barcode" placeholder="Kameradan/klavyeden barkod" />
+          <button class="primary" id="transfer-save">Transferi Kaydet</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="view-count" class="hidden">
+    <div class="section">
+      <div class="label">Sayım Lokasyonu</div>
+      <select id="count-location"></select>
+    </div>
+    <div class="grid-2 section">
+      <div>
+        <div class="label">Barkod Başına Miktar</div>
+        <input id="count-qty" type="number" value="1" min="1" />
+      </div>
+      <div>
+        <div class="label">Barkod</div>
+        <div class="row">
+          <input id="count-barcode" placeholder="Okutulacak barkod" />
+          <button id="count-add" class="ghost">Ekle</button>
+        </div>
+      </div>
+    </div>
+    <div class="card" id="count-lines-card">
+      <div style="font-weight:800">Sayım Satırları <span class="muted small" id="count-lines-count">(0)</span></div>
+      <div id="count-lines"></div>
+    </div>
+    <div class="section"><button class="primary" id="count-submit">Sayımı Kuyruğa Ekle</button></div>
+  </div>
+
+  <hr />
+
+  <div class="section">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <div style="font-weight:800">Kamera Tarama</div>
+      <select id="camera-devices" title="Kamera seç"></select>
+      <button id="camera-start" class="ghost">Başlat</button>
+      <button id="camera-stop" class="ghost">Durdur</button>
+      <button id="torch-toggle" class="ghost">Fener</button>
+      <span id="camera-msg" class="small muted"></span>
+    </div>
+    <video id="preview" playsinline muted></video>
+    <div class="small muted">Kamera, <strong>HTTPS</strong> veya <strong>http://localhost</strong> altında çalışır. Mobil tarayıcılarda izin penceresini onaylayın. Code128/QR desteklenir.</div>
+  </div>
+
+  <div class="section">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="font-weight:800">Bekleyen İşlemler</div>
+      <button id="sync-now" class="ghost">Kuyruğu Senkronize Et</button>
+      <span id="sync-state" class="small muted"></span>
+    </div>
+    <div id="queue-list"></div>
+  </div>
+
+  <div class="small muted">Veriler tarayıcı <code>localStorage</code>'ında saklanır. API için <code>sendToAPI</code>'yi özelleştirin.</div>
+</div>
+
+<script>
+(function(){
+  // ---- Config ----
+  const DEPOTS = [
+    { code: 'D1', name: 'Depo 1' },
+    { code: 'D2', name: 'Depo 2' },
+    { code: 'D3', name: 'Depo 3' },
+  ];
+  const KEYS = { QUEUE:'queue_v2', LAST_TAB:'tab_v2', LAST_MODE:'mode_v2', LAST_LOC:'loc_v2' };
+
+  // ---- DOM helpers ----
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  const opt = (v,t) => { const o=document.createElement('option'); o.value=v; o.textContent=t; return o; };
+
+  // ---- State ----
+  let queue = JSON.parse(localStorage.getItem(KEYS.QUEUE) || '[]');
+  let activeTab = localStorage.getItem(KEYS.LAST_TAB) || 'move';
+  let moveMode = localStorage.getItem(KEYS.LAST_MODE) || 'IN';
+
+  // ---- Utils ----
+  const uuid = ()=>'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0,v=c==='x'?r:(r&0x3)|0x8;return v.toString(16)});
+  function saveQueue(){ localStorage.setItem(KEYS.QUEUE, JSON.stringify(queue)); }
+  function setTab(id){ activeTab=id; localStorage.setItem(KEYS.LAST_TAB,id); renderTabs(); }
+  function setMode(m){ moveMode=m; localStorage.setItem(KEYS.LAST_MODE,m); renderMoveMode(); }
+
+  // ---- API stub ----
+  async function sendToAPI(item){
+    // TODO: Gerçek endpoint'lerle değiştirin
+    await new Promise(r=>setTimeout(r,250));
+    const ok = Math.random() < 0.9;
+    return { ok };
+  }
+
+  // ---- Rendering ----
+  function renderDepots(selectEl){ selectEl.innerHTML=''; DEPOTS.forEach(d=> selectEl.appendChild(opt(d.code,`${d.name} (${d.code})`)) ); }
+  function renderTabs(){
+    $$('.tabs .tab').forEach(b=> b.classList.toggle('active', b.dataset.tab===activeTab));
+    $('#view-move').classList.toggle('hidden', activeTab!=='move');
+    $('#view-transfer').classList.toggle('hidden', activeTab!=='transfer');
+    $('#view-count').classList.toggle('hidden', activeTab!=='count');
+  }
+  function renderMoveMode(){ $('#btn-in').classList.toggle('active', moveMode==='IN'); $('#btn-out').classList.toggle('active', moveMode==='OUT'); }
+  function renderQueue(){
+    const wrap = $('#queue-list'); wrap.innerHTML='';
+    if (!queue.length){ wrap.textContent='Şu anda bekleyen işlem yok.'; return; }
+    queue.forEach(item=>{
+      const card = document.createElement('div'); card.className='card';
+      const h = document.createElement('div'); h.style.fontWeight='800'; h.textContent=item.action; card.appendChild(h);
+      if ('barcode' in item){ const d=document.createElement('div'); d.textContent='Barkod: '+item.barcode; card.appendChild(d); }
+      if ('qty' in item){ const d=document.createElement('div'); d.textContent='Miktar: '+item.qty; card.appendChild(d); }
+      if (item.action!=='TRANSFER' && item.location){ const d=document.createElement('div'); d.textContent='Lokasyon: '+item.location; card.appendChild(d); }
+      if (item.action==='TRANSFER'){ const d=document.createElement('div'); d.textContent='From→To: '+item.fromLocation+' → '+item.toLocation; card.appendChild(d); }
+      if (item.action==='COUNT'){ const d=document.createElement('div'); d.innerHTML='Sayım Lokasyonu: '+item.location+'<br/>Satır: '+item.lines.length; card.appendChild(d); }
+      const t=document.createElement('div'); t.className='small muted'; t.textContent=new Date(item.timestamp).toLocaleString(); card.appendChild(t);
+      const row=document.createElement('div'); row.className='row'; row.style.marginTop='8px';
+      if (!item.synced){ const retry=document.createElement('button'); retry.className='primary'; retry.textContent='Tekrar Dene'; retry.onclick=()=>retryOne(item.id); row.appendChild(retry); }
+      const del=document.createElement('button'); del.className='ghost'; del.textContent='Sil'; del.onclick=()=>deleteOne(item.id); row.appendChild(del);
+      card.appendChild(row);
+      wrap.appendChild(card);
+    });
+  }
+
+  // ---- Actions ----
+  function addMove(){
+    const barcode = $('#move-barcode').value.trim();
+    const qty = Number($('#move-qty').value); const location = $('#move-location').value;
+    if (!barcode) return alert('Barkod boş');
+    if (!qty || qty<=0) return alert('Miktar pozitif olmalı');
+    const item = { id:uuid(), action:moveMode, barcode, qty, location, timestamp:Date.now(), synced:false };
+    queue = [item, ...queue]; saveQueue(); renderQueue();
+    $('#move-barcode').value=''; $('#move-qty').value=1; $('#move-barcode').focus();
+  }
+  function addTransfer(){
+    const barcode = $('#transfer-barcode').value.trim(); const qty = Number($('#transfer-qty').value);
+    const from = $('#from-location').value; const to = $('#to-location').value;
+    if (!barcode) return alert('Barkod boş'); if (!qty || qty<=0) return alert('Miktar pozitif olmalı'); if (from===to) return alert('Kaynak ve hedef aynı olamaz');
+    const item = { id:uuid(), action:'TRANSFER', barcode, qty, fromLocation:from, toLocation:to, timestamp:Date.now(), synced:false };
+    queue = [item, ...queue]; saveQueue(); renderQueue();
+    $('#transfer-barcode').value=''; $('#transfer-qty').value=1; $('#transfer-barcode').focus();
+  }
+  function addCountLine(){
+    const barcode = $('#count-barcode').value.trim(); const qty = Number($('#count-qty').value);
+    if (!barcode) return alert('Barkod boş'); if (!qty || qty<=0) return alert('Miktar pozitif olmalı');
+    const linesWrap = $('#count-lines');
+    const existing = Array.from(linesWrap.children).find(ch=>ch.dataset.code===barcode);
+    if (existing){ const qtyEl = existing.querySelector('.qty'); qtyEl.textContent = String(Number(qtyEl.textContent) + qty); }
+    else { const row = document.createElement('div'); row.className='row'; row.dataset.code=barcode; row.style.justifyContent='space-between'; row.style.padding='4px 0';
+      const l = document.createElement('div'); l.textContent = barcode; l.style.flex='1'; l.style.overflow='hidden'; l.style.textOverflow='ellipsis'; l.style.whiteSpace='nowrap';
+      const r = document.createElement('div'); r.className='qty'; r.style.width='60px'; r.style.textAlign='right'; r.textContent=String(qty);
+      row.appendChild(l); row.appendChild(r); linesWrap.prepend(row); }
+    $('#count-barcode').value=''; $('#count-barcode').focus(); updateCountCounter();
+  }
+  function submitCount(){
+    const linesWrap = $('#count-lines'); const location = $('#count-location').value;
+    const lines = Array.from(linesWrap.children).map(ch=>({ barcode: ch.dataset.code, qty: Number(ch.querySelector('.qty').textContent) }));
+    if (!lines.length) return alert('En az bir satır ekleyin');
+    const item = { id:uuid(), action:'COUNT', location, lines, timestamp:Date.now(), synced:false };
+    queue = [item, ...queue]; saveQueue(); renderQueue(); linesWrap.innerHTML=''; updateCountCounter();
+  }
+  async function syncNow(){
+    const state = $('#sync-state'); state.textContent='Gönderiliyor…';
+    for (let i=0;i<queue.length;i++){
+      const it = queue[i]; if (it.synced) continue; const { ok } = await sendToAPI(it);
+      if (ok) { queue[i] = { ...it, synced:true }; saveQueue(); }
+    }
+    state.textContent='Bitti'; setTimeout(()=>state.textContent='', 1200); renderQueue();
+  }
+  function retryOne(id){ const it = queue.find(q=>q.id===id); if (!it) return; sendToAPI(it).then(({ok})=>{ if (ok){ queue=queue.map(q=> q.id===id?{...q, synced:true}:q ); saveQueue(); renderQueue(); } else alert('Gönderilemedi'); }); }
+  function deleteOne(id){ queue = queue.filter(q=>q.id!==id); saveQueue(); renderQueue(); }
+  function updateCountCounter(){ $('#count-lines-count').textContent='(' + $('#count-lines').children.length + ')'; }
+
+  // ---- Camera (ZXing) ----
+  let reader = null; let activeDeviceId = null; let torchOn = false;
+  function httpsOk(){ return location.protocol==='https:' || location.hostname==='localhost' || location.hostname==='127.0.0.1'; }
+  async function loadZXing(){ return new Promise((res,rej)=>{ if (window.ZXing) return res(); const s=document.createElement('script'); s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.20.0/umd/index.min.js'; s.onload=res; s.onerror=()=>rej(new Error('ZXing yüklenemedi')); document.head.appendChild(s); }); }
+  async function listCameras(){ const devices = await navigator.mediaDevices.enumerateDevices(); return devices.filter(d=>d.kind==='videoinput'); }
+  async function fillCameraList(){ const sel=$('#camera-devices'); sel.innerHTML=''; const cams = await listCameras(); cams.forEach(c=> sel.appendChild(opt(c.deviceId, c.label||'Kamera')) ); if (cams[0]) activeDeviceId=cams[0].deviceId; }
+  function debounce(fn, ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a), ms); }; }
+
+  async function startCamera(){
+    const msg=$('#camera-msg'); if (!httpsOk()) { msg.textContent='Kamera için HTTPS veya localhost gerekir.'; return; }
+    try{
+      await loadZXing(); if (!reader) reader = new ZXing.BrowserMultiFormatReader();
+      await fillCameraList();
+      const id = $('#camera-devices').value || activeDeviceId;
+      const video = $('#preview');
+      msg.textContent='Kamera açılıyor…';
+      await reader.decodeFromVideoDevice(id, 'preview', debounce((res, err)=>{
+        if (res && res.text){
+          // duplicate spam koruması
+          if (startCamera.last === res.text && Date.now() - startCamera.lastTs < 900) return;
+          startCamera.last = res.text; startCamera.lastTs = Date.now();
+          const code = res.text;
+          // Aktif sekmeye göre işleme
+          if (activeTab==='move'){ $('#move-barcode').value=code; addMove(); }
+          else if (activeTab==='transfer'){ $('#transfer-barcode').value=code; addTransfer(); }
+          else if (activeTab==='count'){ $('#count-barcode').value=code; addCountLine(); }
+        }
+      }, 100));
+      msg.textContent='Kamera aktif — barkodu gösterin';
+    }catch(e){ $('#camera-msg').textContent='Hata: '+e.message; }
+  }
+  async function stopCamera(){ if (reader){ reader.reset(); } $('#camera-msg').textContent='Kamera durduruldu'; }
+  async function toggleTorch(){ try{
+      const video = $('#preview'); const track = video.srcObject && video.srcObject.getVideoTracks()[0];
+      if (!track) return; const caps = track.getCapabilities && track.getCapabilities(); if (!caps || !caps.torch){ $('#camera-msg').textContent='Fener desteklenmiyor'; return; }
+      torchOn = !torchOn; await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+      $('#camera-msg').textContent = torchOn ? 'Fener açık' : 'Fener kapalı';
+    }catch(e){ $('#camera-msg').textContent='Fener hatası: '+e.message; }
+  }
+
+  // ---- Init ----
+  ['#move-location','#from-location','#to-location','#count-location'].forEach(sel=>{ const el=$(sel); renderDepots(el); if (sel==='#move-location'){ const last=localStorage.getItem(KEYS.LAST_LOC); if (last) el.value=last; el.addEventListener('change',()=> localStorage.setItem(KEYS.LAST_LOC, el.value)); } });
+  $$('.tabs .tab').forEach(b=> b.addEventListener('click', ()=> setTab(b.dataset.tab)) );
+  $('#btn-in').addEventListener('click', ()=> setMode('IN'));
+  $('#btn-out').addEventListener('click', ()=> setMode('OUT'));
+  $('#move-save').addEventListener('click', addMove);
+  $('#transfer-save').addEventListener('click', addTransfer);
+  $('#count-add').addEventListener('click', addCountLine);
+  $('#count-submit').addEventListener('click', submitCount);
+  $('#sync-now').addEventListener('click', syncNow);
+  $('#camera-start').addEventListener('click', startCamera);
+  $('#camera-stop').addEventListener('click', stopCamera);
+  $('#torch-toggle').addEventListener('click', toggleTorch);
+  $('#camera-devices').addEventListener('change', ()=>{ stopCamera(); startCamera(); });
+
+  // Enter kısayolu
+  ['#move-barcode','#transfer-barcode','#count-barcode'].forEach(sel=>{ const el=$(sel); el.addEventListener('keydown', (e)=>{ if (e.key==='Enter'){ if (sel==='#move-barcode') addMove(); if (sel==='#transfer-barcode') addTransfer(); if (sel==='#count-barcode') addCountLine(); } }); });
+
+  renderTabs(); renderMoveMode(); renderQueue();
+
+  // Oto başlat: HTTPS/localhost ise kamera otomatik açılır
+  if (httpsOk()) startCamera(); else $('#camera-msg').textContent='Kamera için HTTPS veya localhost gerekir.';
+})();
+</script>
+</body>
+</html>
 
